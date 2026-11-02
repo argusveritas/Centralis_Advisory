@@ -39,32 +39,61 @@ document.querySelectorAll("[data-framework-tab]").forEach(button => button.addEv
   }
 }));
 
-const assessment = document.querySelector("[data-assessment]");
-assessment?.addEventListener("submit", event => {
+const readinessAssessment = document.querySelector("[data-ai-readiness]");
+const readinessProfiles = {
+  Emerging: {
+    description: "The foundations are still taking shape. The most useful next step is to narrow the opportunity, clarify the workflow, and establish the minimum data and governance requirements before committing to a pilot.",
+    priorities: ["Choose one measurable business problem", "Map the current workflow and evidence", "Name an accountable executive sponsor"]
+  },
+  Ready: {
+    description: "You have several foundations for a focused pilot. Before scaling, resolve the most important gaps in data, operating ownership, controls, and user adoption around one prioritized use case.",
+    priorities: ["Select a bounded, testable use case", "Define pilot success and exit criteria", "Design human review and operating ownership"]
+  },
+  Advanced: {
+    description: "Your organization appears positioned to move from isolated use cases toward a managed portfolio. The emphasis should shift to repeatable governance, value measurement, integration, and continuous improvement.",
+    priorities: ["Sequence use cases as a portfolio", "Standardize governance and measurement", "Build reusable implementation capabilities"]
+  }
+};
+
+readinessAssessment?.addEventListener("change", event => {
+  const fieldset = event.target.closest("[data-readiness-question]");
+  fieldset?.classList.remove("is-missing");
+  const error = fieldset?.querySelector("[data-readiness-error]");
+  if (error) error.textContent = "";
+});
+
+readinessAssessment?.addEventListener("submit", event => {
   event.preventDefault();
-  const form = new FormData(assessment);
-  const driver = form.get("driver");
-  const priority = form.get("priority");
-  const integrated = form.get("integrated");
-  const result = assessment.querySelector("[data-assessment-result]");
-  if (!driver || !priority || !integrated) {
-    result.innerHTML = "<strong>Please answer all three questions.</strong>";
-    result.focus();
+  const questions = [...readinessAssessment.querySelectorAll("[data-readiness-question]")];
+  const unanswered = questions.filter(question => !question.querySelector("input:checked"));
+  questions.forEach(question => {
+    const missing = unanswered.includes(question);
+    question.classList.toggle("is-missing", missing);
+    question.querySelector("[data-readiness-error]").textContent = missing ? "Select one response." : "";
+  });
+  if (unanswered.length) {
+    const first = unanswered[0];
+    first.querySelector("legend")?.focus();
     return;
   }
-  const routes = {
-    ai: ["AI Strategy and Implementation", "/services/ai-strategy-implementation/"],
-    people: ["Human Capital Consulting", "/services/human-capital-consulting/"],
-    operations: ["Operations Consulting", "/services/operations-consulting/"],
-    finance: ["Corporate Finance Advisory", "/services/corporate-finance-advisory/"],
-    accounting: ["Accounting Support Practice", "/services/accounting-support/"]
-  };
-  const [label, href] = routes[driver];
-  const integration = integrated === "yes" ? " Because the issue crosses functions, an integrated engagement may be more useful than a single-practice scope." : " A focused diagnostic can test whether other functions should be included.";
-  const action = priority === "implement" ? "implementation planning" : "a focused assessment";
-  result.innerHTML = `<h3>A useful starting point: ${label}</h3><p>Begin with ${action}.${integration}</p><a class="text-link" href="${href}">Explore this capability <span aria-hidden="true">→</span></a>`;
+
+  const score = questions.reduce((total, question) => total + Number(question.querySelector("input:checked").value), 0);
+  const tier = score <= 3 ? "Emerging" : score <= 7 ? "Ready" : "Advanced";
+  const profile = readinessProfiles[tier];
+  const result = readinessAssessment.querySelector("[data-readiness-result]");
+  const percent = score * 10;
+  result.innerHTML = `<div class="result-heading"><span>Your result</span><strong>${tier}</strong><span>${score} / 10</span></div><div class="score-track" aria-label="Readiness score ${score} out of 10"><span style="width:${percent}%"></span></div><p>${profile.description}</p><strong>Recommended priorities</strong><ul>${profile.priorities.map(priority => `<li>${priority}</li>`).join("")}</ul><a class="button" href="${readinessAssessment.dataset.schedulingUrl}">Book a Results Review</a>`;
+  readinessAssessment.querySelector("[data-assessment-reset]").hidden = false;
   result.focus();
-  dispatchEvent(new CustomEvent("centralis:analytics", { detail: { event: "self_assessment_complete", result: driver, integrated } }));
+  dispatchEvent(new CustomEvent("centralis:analytics", { detail: { event: "ai_readiness_complete", tier, score } }));
+});
+
+readinessAssessment?.addEventListener("reset", () => {
+  readinessAssessment.querySelectorAll("[data-readiness-question]").forEach(question => question.classList.remove("is-missing"));
+  readinessAssessment.querySelectorAll("[data-readiness-error]").forEach(error => { error.textContent = ""; });
+  const result = readinessAssessment.querySelector("[data-readiness-result]");
+  result.replaceChildren();
+  readinessAssessment.querySelector("[data-assessment-reset]").hidden = true;
 });
 
 const insightSearch = document.querySelector("[data-insight-search]");
@@ -158,6 +187,102 @@ document.querySelector("[data-copy-link]")?.addEventListener("click", async () =
   } catch {
     status.textContent = "Copy unavailable.";
   }
+});
+
+const insightGate = document.querySelector("[data-insight-gate]");
+const gatedContent = document.querySelector("[data-gated-content]");
+const leadGateForm = document.querySelector("[data-lead-gate-form]");
+const gateStorageKey = insightGate ? `centralis:guide-access:${insightGate.dataset.resource}` : "";
+
+function revealGatedContent({ focus = false } = {}) {
+  if (!insightGate || !gatedContent) return;
+  insightGate.hidden = true;
+  gatedContent.hidden = false;
+  if (focus) {
+    const heading = gatedContent.querySelector("h2");
+    heading?.setAttribute("tabindex", "-1");
+    heading?.focus();
+    gatedContent.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  }
+}
+
+if (gateStorageKey) {
+  try {
+    if (sessionStorage.getItem(gateStorageKey) === "granted") revealGatedContent();
+  } catch {
+    // Access still works if browser storage is unavailable.
+  }
+}
+
+leadGateForm?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const status = leadGateForm.querySelector("[data-gate-status]");
+  const email = leadGateForm.elements.email;
+  const consent = leadGateForm.elements.consent;
+  const emailError = leadGateForm.querySelector("[data-gate-email-error]");
+  email.removeAttribute("aria-invalid");
+  consent.removeAttribute("aria-invalid");
+  emailError.textContent = "";
+  status.textContent = "";
+
+  if (!email.validity.valid || !consent.checked) {
+    if (!email.validity.valid) {
+      email.setAttribute("aria-invalid", "true");
+      emailError.textContent = email.validity.typeMismatch ? "Enter a valid email address." : "Enter your business email.";
+    }
+    if (!consent.checked) consent.setAttribute("aria-invalid", "true");
+    status.textContent = !email.validity.valid && !consent.checked ? "Enter a valid email and confirm consent to continue." : !consent.checked ? "Confirm consent to continue." : "Review the email address.";
+    (!email.validity.valid ? email : consent).focus();
+    return;
+  }
+  if (leadGateForm.elements.website.value) return;
+
+  const endpoint = insightGate.dataset.endpoint;
+  const preview = insightGate.dataset.preview === "true";
+  if (!endpoint && !preview) {
+    status.textContent = "Guide access is temporarily unavailable. Please contact Centralis for a copy.";
+    status.focus();
+    return;
+  }
+
+  const submit = leadGateForm.querySelector("button[type='submit']");
+  submit.disabled = true;
+  submit.textContent = "Unlocking…";
+  try {
+    if (!preview) {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.value.trim(), consent: true, resource: insightGate.dataset.resource, submittedAt: new Date().toISOString() })
+      });
+      if (!response.ok) throw new Error("Lead capture request failed");
+    }
+    try { sessionStorage.setItem(gateStorageKey, "granted"); } catch { /* Session persistence is optional. */ }
+    revealGatedContent({ focus: true });
+    dispatchEvent(new CustomEvent("centralis:analytics", { detail: { event: "insight_gate_complete", resource: insightGate.dataset.resource, preview } }));
+  } catch {
+    status.textContent = "We could not unlock the guide. Please try again or contact Centralis for a copy.";
+    status.focus();
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "Unlock the guide";
+  }
+});
+
+document.querySelector("[data-print-guide]")?.addEventListener("click", () => window.print());
+
+document.querySelector("[data-download-guide]")?.addEventListener("click", event => {
+  const title = document.querySelector(".article-hero h1")?.textContent.trim() || "Centralis guide";
+  const sections = [...document.querySelectorAll(".gated-content .article-body > section")];
+  const body = sections.map(section => `${section.querySelector("h2")?.textContent.trim()}\r\n\r\n${section.querySelector("p")?.textContent.trim()}`).join("\r\n\r\n");
+  const text = `${title}\r\nCentralis Advisory Group\r\n\r\n${body}\r\n\r\nThis guide is for general informational purposes and does not constitute professional advice.\r\n`;
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${event.currentTarget.dataset.downloadName}.txt`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  dispatchEvent(new CustomEvent("centralis:analytics", { detail: { event: "insight_download", resource: insightGate?.dataset.resource } }));
 });
 
 document.querySelectorAll("a[href^='tel:']").forEach(link => link.addEventListener("click", () => dispatchEvent(new CustomEvent("centralis:analytics", { detail: { event: "telephone_click" } }))));

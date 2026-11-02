@@ -7,6 +7,8 @@ export const site = {
   phone: "[NEEDS: Telephone number]",
   serviceArea: "[NEEDS: Office address or service area]",
   schedulingUrl: "/contact/",
+  leadCaptureEndpoint: "",
+  leadCapturePreview: true,
   social: "[NEEDS: Social-media profiles]",
   legalReview: "Draft for review by qualified counsel before publication.",
 };
@@ -157,6 +159,8 @@ export const insights = [
     readTime: "6 min read",
     author: "[NEEDS: Author]",
     status: "Editorial draft",
+    gated: true,
+    gateLabel: "Complimentary guide",
     body: [
       ["Start with the decision or workflow", "Useful AI initiatives begin with a business outcome, a recurring decision, or a workflow that creates meaningful friction. Define what should improve before choosing a model or application."],
       ["Test value and feasibility together", "Potential value is only one side of prioritization. Leaders should also examine data availability, integration effort, control requirements, adoption needs, and the cost of operating the solution after launch."],
@@ -213,7 +217,7 @@ export const needs = [
   "Contact email, telephone number, and service area",
   "Leadership names, biographies, headshots, and approved credentials",
   "Firm history, industry experience, selected engagements, and affiliations",
-  "Scheduling link and preferred form-delivery destination",
+  "Approved scheduling link and secure contact and lead-capture endpoints",
   "Approved social-media profiles",
   "Approval for public product case studies, development-stage labels, supporting metrics, and product visuals",
   "Final canonical domain and hosting decision",
